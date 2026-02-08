@@ -1,0 +1,150 @@
+---
+title: "Exploratory Analysis"
+author: "Jack Cunningham"
+format: pdf
+editor: visual
+---
+
+# Reading Data and Loading Libraries
+
+```{r}
+library(tidyverse)
+library(naniar)
+library(ebbr)
+```
+
+```{r}
+path <- "D:/Portfolio Projects/rotten_tomatoes_empirical_bayes/Data/Raw/rotten_tomatoes_movies.csv"
+df <- read_csv(path, show_col_types = FALSE)
+head(df)
+```
+
+# Selecting Variables of Interest
+
+```{r}
+movie_df <- df |> 
+  select(rotten_tomatoes_link, movie_title, original_release_date,
+         tomatometer_rating, tomatometer_count, audience_rating, audience_count)
+head(movie_df)
+```
+
+# Looking for missing values
+
+```{r}
+colSums(is.na(movie_df))
+```
+
+```{r}
+vis_miss(movie_df)
+```
+
+Since there are so few times where we have missing ratings (and its probably due to very unpopular movies) I'll filter this out.
+
+```{r}
+filtered_movie_df <- movie_df |> 
+  filter(!if_any(c(audience_rating,audience_count,tomatometer_rating,
+                   tomatometer_count), is.na))
+colSums(is.na(filtered_movie_df))
+```
+
+Now the only missing values we have are for original release date, we haven't decided on how to address dates yet so I'll leave for now.
+
+```{r}
+filtered_movie_df |>
+  ggplot(aes(x = tomatometer_rating)) +
+  geom_histogram()
+```
+
+Lets see how this changes if we introduce a filter on the amount of tomato meter count.
+
+```{r}
+quantile(filtered_movie_df$tomatometer_count)
+```
+
+So lets do 12 for now.
+
+```{r}
+filtered_movie_df |>
+  filter(tomatometer_count > 12) |> 
+  ggplot(aes(x = tomatometer_rating)) +
+  geom_histogram()
+```
+
+it seems this distribution trends up and peaks around rating 87.5. Lets also do a density plot.
+
+```{r}
+filtered_movie_df |>
+  filter(tomatometer_count > 30) |> 
+  ggplot(aes(x = tomatometer_rating)) +
+  geom_density()
+```
+
+Before we fit a distribution we need to construct a "fresh critics count", aka the number of critics who gave this movie a positive review.
+
+```{r}
+filtered_movie_df <- filtered_movie_df |> 
+  mutate(tomato_meter_fresh_critics_count = round((1/100)*tomatometer_rating*
+            tomatometer_count),
+         audience_rating_fresh_count = round((1/100) * audience_rating *
+                                               audience_count))
+```
+
+```{r}
+prior <- filtered_movie_df |>
+  filter(tomatometer_count > 30) |> 
+  ebb_fit_prior(tomato_meter_fresh_critics_count, tomatometer_count)
+prior
+```
+
+```{r}
+prior2 <- filtered_movie_df |>
+  filter(audience_count > 1000) |> 
+  ebb_fit_prior(audience_rating_fresh_count, audience_count)
+prior2
+```
+
+```{r}
+filtered_movie_df |> 
+  filter(tomatometer_count > 30) |> 
+ggplot(aes(x = tomatometer_rating/100)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 50) +
+  stat_function(
+    fun = dbeta,
+    args = list(shape1 = prior$parameters[[1]], shape2 = prior$parameters[[2]]),
+    linewidth = 1
+  ) +
+  labs(title = "Histogram with Density Overlay")
+```
+
+This seems to fit not too great, it seems there might be a mixture situation here. For now lets stick with it.
+
+```{r}
+eb_movies <- filtered_movie_df |> 
+  add_ebb_estimate(tomato_meter_fresh_critics_count,tomatometer_count,
+                   prior_subset = tomatometer_count > 30)
+head(eb_movies)
+```
+
+```{r}
+eb_movies |> 
+  slice_max(.raw, n = 10) |> 
+  select(tomatometer_count,.raw,.fitted)
+```
+
+```{r}
+eb_movies |> 
+  ggplot(aes(.raw, .fitted, color = tomatometer_count)) +
+  geom_point() +
+  geom_abline(color = "red") +
+  geom_hline(yintercept = tidy(prior)$mean, color = "red") +
+  scale_color_continuous(trans = "log",breaks = c(1,10,50,400)) +
+  labs(x = "Raw Movie Score",
+       y = "Shrunked Movie Score")
+  #xlim(c(.8,1)) +
+  #ylim(c(.8,1))
+```
+
+```{r}
+eb_movies |> 
+  slice_max(.fitted, n = 25)
+```
