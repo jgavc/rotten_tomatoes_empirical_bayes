@@ -1,0 +1,214 @@
+---
+title: "Audience Score Analysis"
+author: "Jack Cunningham"
+format: html
+editor: visual
+---
+
+# Libraries and Loading Data
+
+```{r}
+library(tidyverse)
+library(naniar)
+library(ebbr)
+```
+
+```{r}
+path <- "D:/Portfolio Projects/rotten_tomatoes_empirical_bayes/Data/Raw/rotten_tomatoes_movies.csv"
+df <- as.data.frame(read_csv(path, show_col_types = FALSE))
+head(df)
+```
+
+# Variables of Interest
+
+```{r}
+movie_df <- df |> 
+  select(rotten_tomatoes_link, movie_title, original_release_date,
+         tomatometer_rating, tomatometer_count, audience_rating, audience_count)
+head(movie_df)
+```
+
+```{r}
+filtered_movie_df <- movie_df |> 
+  filter(!if_any(c(audience_rating,audience_count,tomatometer_rating,
+                   tomatometer_count), is.na))
+colSums(is.na(filtered_movie_df))
+```
+
+# Assessing density of tomatometer_rating
+
+```{r}
+quantile(filtered_movie_df$audience_count)
+```
+
+Lets use 25,000 to assess the density
+
+```{r}
+filtered_movie_df |>
+  filter(audience_count > 25000) |> 
+  ggplot(aes(x = audience_rating)) +
+  geom_density()
+```
+
+Adding an audience fresh count number:
+
+```{r}
+filtered_movie_df <- filtered_movie_df |> 
+  mutate(audience_fresh_count = round(1/100 * audience_rating * audience_count))
+```
+
+```{r}
+# --- Beta-Binomial log pmf (stable) ---
+log_beta_binom_pmf <- function(k, n, a, b) {
+  # log[ choose(n,k) * Beta(k+a, n-k+b) / Beta(a,b) ]
+  lchoose(n, k) +
+    lbeta(k + a, n - k + b) -
+    lbeta(a, b)
+}
+
+# --- Weighted negative log-likelihood for one component ---
+neg_wll_component <- function(par_log, k, n, w) {
+  a <- exp(par_log[1])
+  b <- exp(par_log[2])
+  # weighted log-likelihood
+  ll <- sum(w * log_beta_binom_pmf(k, n, a, b))
+  -ll
+}
+
+# --- Helper: initialize alpha/beta from mean/var of p = k/n ---
+mom_beta_ab <- function(p, w = NULL) {
+  if (is.null(w)) w <- rep(1, length(p))
+  w <- w / sum(w)
+  m <- sum(w * p)
+  v <- sum(w * (p - m)^2)
+
+  # If variance is tiny / degenerate, set large concentration
+  if (!is.finite(v) || v < 1e-6) {
+    phi <- 200
+    return(c(alpha = max(1e-3, m * phi),
+             beta  = max(1e-3, (1 - m) * phi)))
+  }
+
+  # Method of moments: v = m(1-m)/(phi+1)
+  phi <- m * (1 - m) / v - 1
+  if (!is.finite(phi) || phi <= 0) phi <- 10
+
+  c(alpha = max(1e-3, m * phi),
+    beta  = max(1e-3, (1 - m) * phi))
+}
+
+# --- Main EM routine ---
+fit_beta_binom_mixture <- function(k, n, K = 2, max_iter = 200, tol = 1e-6,
+                                   verbose = TRUE, seed = 1) {
+  stopifnot(K == 2)
+  k <- as.integer(k)
+  n <- as.integer(n)
+
+  ok <- is.finite(k) & is.finite(n) & n > 0 & k >= 0 & k <= n
+  k <- k[ok]; n <- n[ok]
+  p <- k / n
+
+  set.seed(seed)
+  # init: kmeans on proportions
+  km <- kmeans(p, centers = 2)
+  z <- km$cluster
+
+  ab1 <- mom_beta_ab(p[z == 1])
+  ab2 <- mom_beta_ab(p[z == 2])
+  pi1 <- mean(z == 1)
+  pi2 <- 1 - pi1
+
+  a1 <- ab1["alpha"]; b1 <- ab1["beta"]
+  a2 <- ab2["alpha"]; b2 <- ab2["beta"]
+
+  loglik_prev <- -Inf
+
+  for (iter in 1:max_iter) {
+
+    # E-step: responsibilities
+    ll1 <- log(pi1) + log_beta_binom_pmf(k, n, a1, b1)
+    ll2 <- log(pi2) + log_beta_binom_pmf(k, n, a2, b2)
+
+    # log-sum-exp
+    mll <- pmax(ll1, ll2)
+    denom <- mll + log(exp(ll1 - mll) + exp(ll2 - mll))
+
+    r1 <- exp(ll1 - denom)  # responsibility for component 1
+    r2 <- 1 - r1
+
+    loglik <- sum(denom)
+
+    # check convergence
+    if (verbose && (iter %% 5 == 0 || iter == 1)) {
+      cat(sprintf("iter %3d | logLik %.3f | pi1 %.3f | (a1,b1)=(%.2f,%.2f) | (a2,b2)=(%.2f,%.2f)\n",
+                  iter, loglik, pi1, a1, b1, a2, b2))
+    }
+
+    if (abs(loglik - loglik_prev) < tol) break
+    loglik_prev <- loglik
+
+    # M-step: update mixing weights
+    pi1 <- mean(r1)
+    pi2 <- 1 - pi1
+
+    # M-step: update (a,b) for each component via weighted MLE
+    opt1 <- optim(par = log(c(a1, b1)),
+                  fn = neg_wll_component,
+                  k = k, n = n, w = r1,
+                  method = "BFGS")
+    a1 <- exp(opt1$par[1]); b1 <- exp(opt1$par[2])
+
+    opt2 <- optim(par = log(c(a2, b2)),
+                  fn = neg_wll_component,
+                  k = k, n = n, w = r2,
+                  method = "BFGS")
+    a2 <- exp(opt2$par[1]); b2 <- exp(opt2$par[2])
+
+    # guardrails
+    a1 <- max(a1, 1e-6); b1 <- max(b1, 1e-6)
+    a2 <- max(a2, 1e-6); b2 <- max(b2, 1e-6)
+    pi1 <- min(max(pi1, 1e-6), 1 - 1e-6)
+    pi2 <- 1 - pi1
+  }
+
+  list(
+    K = 2,
+    pi = c(pi1, pi2),
+    alpha = c(a1, a2),
+    beta  = c(b1, b2),
+    logLik = loglik_prev,
+    responsibilities = cbind(r1 = r1, r2 = r2),
+    used_rows = which(ok),
+    iterations = iter
+  )
+}
+```
+
+```{r}
+mm <- fit_beta_binom_mixture(
+  k = filtered_movie_df$audience_fresh_count,
+  n = filtered_movie_df$audience_count,
+  K = 2,
+  verbose = TRUE
+)
+
+mm$pi
+mm$alpha
+mm$beta
+```
+
+```{r}
+# Mixture beta density for underlying p
+mix_beta_density <- function(x, pi, alpha, beta) {
+  pi[1] * dbeta(x, alpha[1], beta[1]) + pi[2] * dbeta(x, alpha[2], beta[2])
+}
+
+reduced_movies <- filtered_movie_df |> filter(audience_count > 25000)
+p <- reduced_movies$audience_fresh_count / reduced_movies$audience_count
+p <- p[is.finite(p)]
+
+hist(p, breaks = 40, freq = FALSE, main = "Proportions with Beta Mixture Overlay", xlab = "fresh / total")
+curve(mix_beta_density(x, mm$pi, mm$alpha, mm$beta), add = TRUE, lwd = 2)
+```
+
+Looks pretty good.

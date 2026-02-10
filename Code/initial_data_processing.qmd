@@ -1,0 +1,37 @@
+---
+title: "Initial Data Preprocessing"
+author: "JC"
+format: html
+editor: visual
+---
+
+# Reading Data and Loading Libraries
+
+```{r}
+library(tidyverse)
+```
+
+```{r}
+path <- "D:/Portfolio Projects/rotten_tomatoes_empirical_bayes/Data/Raw/rotten_tomatoes_movies.csv"
+df <- as.data.frame(read_csv(path, show_col_types = FALSE))
+head(df)
+```
+
+# Selecting Variables of Interest
+
+```{r}
+movie_df <- df |> 
+  select(rotten_tomatoes_link, movie_title, original_release_date,
+         tomatometer_rating, tomatometer_count, audience_rating, audience_count)
+head(movie_df)
+```
+
+# Dealing with missing values
+
+```{r}
+movie_df <- movie_df |> 
+  filter(!if_any(c(audience_rating,audience_count,tomatometer_rating,
+                   tomatometer_count), is.na))
+```
+
+# Constructing Fresh Critics Count and Fresh Audience Count

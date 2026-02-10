@@ -62,6 +62,5 @@ Largest moves:
 ```{r}
 posterior_tbl |> 
   mutate(change = post_mean - tomatometer) |> 
-  slice_max(abs(change), n = 200) |> 
-  View()
+  slice_max(abs(change), n = 10)
 ```
