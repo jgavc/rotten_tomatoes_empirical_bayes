@@ -1,0 +1,67 @@
+---
+title: "Analyzing Mixed Effect Model"
+format: html
+editor: visual
+---
+
+# Libraries and Data
+
+```{r}
+library(tidyverse)
+library(naniar)
+library(ebbr)
+```
+
+```{r}
+load("D:/Portfolio Projects/rotten_tomatoes_empirical_bayes/Data/Processed/posterior_tbl.RData")
+```
+
+# How have posterior means changed?
+
+```{r}
+posterior_tbl <- posterior_tbl |> 
+  mutate(tomatometer = tomato_meter_fresh_critics_count/tomatometer_count)
+```
+
+```{r}
+posterior_tbl |> 
+  ggplot(aes(tomatometer, post_mean, color = tomatometer_count)) +
+  geom_point() + 
+  geom_abline(color = "red") +
+  ylim(c(.75,1)) +
+  xlim(.7,1)
+```
+
+# Prior best movies
+
+```{r}
+posterior_tbl |> 
+  slice_max(tomatometer, n = 10)
+```
+
+```{r}
+posterior_tbl |> 
+  slice_max(post_mean, n = 20)
+```
+
+```{r}
+posterior_tbl |> 
+  slice_min(post_mean, n = 20)
+```
+
+```{r}
+posterior_tbl |> 
+  slice_max(post_mean, n = 20) |> 
+  ggplot(aes(x = post_mean, y = movie_title)) +
+  geom_point() +
+  geom_errorbarh(aes(xmin = lo_95, xmax = hi_95))
+```
+
+Largest moves:
+
+```{r}
+posterior_tbl |> 
+  mutate(change = post_mean - tomatometer) |> 
+  slice_max(abs(change), n = 200) |> 
+  View()
+```
