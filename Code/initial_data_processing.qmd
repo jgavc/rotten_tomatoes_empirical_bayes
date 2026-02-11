@@ -35,3 +35,18 @@ movie_df <- movie_df |>
 ```
 
 # Constructing Fresh Critics Count and Fresh Audience Count
+
+```{r}
+movie_df <- movie_df |> 
+  mutate(tomato_meter_fresh_critics_count = round((1/100)*tomatometer_rating*
+            tomatometer_count),
+         audience_rating_fresh_count = round((1/100) * audience_rating *
+                                               audience_count))
+head(movie_df)
+```
+
+# Saving Data
+
+```{r}
+save(movie_df, file = "D:/Portfolio Projects/rotten_tomatoes_empirical_bayes/Data/Processed/movie_df.RData")
+```

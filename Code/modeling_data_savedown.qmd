@@ -5,4 +5,105 @@ format: html
 editor: visual
 ---
 
-## 
+# Reading Data and Loading Libraries
+
+Libraries:
+
+```{r}
+library(tidyverse)
+library(ebbr)
+```
+
+Data:
+
+```{r}
+load("D:/Portfolio Projects/rotten_tomatoes_empirical_bayes/Data/Processed/movie_df.RData")
+```
+
+Functions that help with fitting mixed beta:
+
+```{r}
+helper_functions <- readRDS("D:/Portfolio Projects/rotten_tomatoes_empirical_bayes/Data/Functions/fit_mixed_beta_helpers.RData")
+```
+
+Saving functions:
+
+```{r}
+fit_beta_binom_mixture <- helper_functions$fit_beta_binom_mixture
+log_beta_binom_pmf <- helper_functions$log_beta_binom_pmf
+mix_beta_density <- helper_functions$mix_beta_density
+mom_beta_ab <- helper_functions$mom_beta_ab
+neg_wll_component <- helper_functions$neg_wll_component
+posterior_params_mixture <- helper_functions$posterior_params_mixture
+sample_from_stored_posterior <- helper_functions$sample_from_stored_posterior
+```
+
+# Fitting Mixture Beta to Tomatometer (critic) Reviews
+
+```{r, cache=TRUE}
+set.seed(10)
+mm_critic <- fit_beta_binom_mixture(
+  k = movie_df$tomato_meter_fresh_critics_count,
+  n = movie_df$tomatometer_count,
+  K = 2,
+  verbose = TRUE
+)
+```
+
+Saving down parameters for each movie:
+
+```{r}
+critics_out <- movie_df |>
+  dplyr::mutate(
+    post = purrr::pmap(
+      list(tomato_meter_fresh_critics_count, tomatometer_count),
+      ~ posterior_params_mixture(..1, ..2, mm_critic$pi, mm_critic$alpha,
+                                 mm_critic$beta)
+    ),
+    w1 = purrr::map_dbl(post, ~ .x$w[1]),
+    w2 = purrr::map_dbl(post, ~ .x$w[2]),
+    a1 = purrr::map_dbl(post, ~ .x$post_alpha[1]),
+    b1 = purrr::map_dbl(post, ~ .x$post_beta[1]),
+    a2 = purrr::map_dbl(post, ~ .x$post_alpha[2]),
+    b2 = purrr::map_dbl(post, ~ .x$post_beta[2])
+  ) |>
+  dplyr::select(-post)
+```
+
+# Fitting Mixture Beta to Audience
+
+```{r, cache=TRUE}
+set.seed(15)
+mm_audience <- fit_beta_binom_mixture(
+  k = movie_df$audience_fresh_count,
+  n = movie_df$audience_count,
+  K = 2,
+  verbose = TRUE
+)
+
+```
+
+```{r}
+audience_out <- movie_df |>
+  dplyr::mutate(
+    post = purrr::pmap(
+      list(audience_rating_fresh_count, audience_count),
+      ~ posterior_params_mixture(..1, ..2, mm_critic$pi, mm_critic$alpha,
+                                 mm_critic$beta)
+    ),
+    w1 = purrr::map_dbl(post, ~ .x$w[1]),
+    w2 = purrr::map_dbl(post, ~ .x$w[2]),
+    a1 = purrr::map_dbl(post, ~ .x$post_alpha[1]),
+    b1 = purrr::map_dbl(post, ~ .x$post_beta[1]),
+    a2 = purrr::map_dbl(post, ~ .x$post_alpha[2]),
+    b2 = purrr::map_dbl(post, ~ .x$post_beta[2])
+  ) |>
+  dplyr::select(-post)
+```
+
+# Saving Data
+
+```{r}
+saveRDS(object = list(mm_critic, critics_out, mm_audience, audience_out),
+        file = "D:/Portfolio Projects/rotten_tomatoes_empirical_bayes/Data/Processed/mixed_beta_output.RData")
+```
