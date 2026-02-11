@@ -75,7 +75,7 @@ critics_out <- movie_df |>
 ```{r, cache=TRUE}
 set.seed(15)
 mm_audience <- fit_beta_binom_mixture(
-  k = movie_df$audience_fresh_count,
+  k = movie_df$audience_rating_fresh_count,
   n = movie_df$audience_count,
   K = 2,
   verbose = TRUE
