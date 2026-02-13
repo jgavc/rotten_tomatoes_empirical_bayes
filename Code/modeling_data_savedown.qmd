@@ -104,6 +104,9 @@ audience_out <- movie_df |>
 # Saving Data
 
 ```{r}
-saveRDS(object = list(mm_critic, critics_out, mm_audience, audience_out),
+saveRDS(object = list(mm_critic = mm_critic, 
+                      critics_out = critics_out, 
+                      mm_audience = mm_audience, 
+                      audience_out = audience_out),
         file = "D:/Portfolio Projects/rotten_tomatoes_empirical_bayes/Data/Processed/mixed_beta_output.RData")
 ```

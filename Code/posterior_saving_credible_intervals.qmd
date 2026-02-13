@@ -1,0 +1,85 @@
+---
+title: "posterior_sampling_and_CIs"
+format: html
+editor: visual
+---
+
+# Reading Data and Loading Libraries
+
+Libraries:
+
+```{r}
+library(tidyverse)
+```
+
+Data:
+
+```{r}
+modeling_data <- readRDS("D:/Portfolio Projects/rotten_tomatoes_empirical_bayes/Data/Processed/mixed_beta_output.RData")
+```
+
+Helper functions:
+
+```{r}
+helper_functions <- readRDS("D:/Portfolio Projects/rotten_tomatoes_empirical_bayes/Data/Functions/fit_mixed_beta_helpers.RData")
+```
+
+Saving functions that are needed:
+
+```{r}
+sample_from_stored_posterior <- helper_functions$sample_from_stored_posterior
+```
+
+# Posterior Sampling
+
+```{r}
+names(modeling_data)
+```
+
+## Critic Sampling
+
+```{r}
+set.seed(25)
+critic_posterior_stats <- modeling_data$critics_out |> 
+  dplyr::mutate(
+    post_mean = w1 * (a1 / (a1 + b1)) + w2 * (a2 / (a2 + b2)),
+    ci = purrr::pmap(
+      list(w1, a1, b1, a2, b2),
+      ~ {
+        d <- sample_from_stored_posterior(..1, ..2, ..3, ..4, ..5, S = 10000)
+        as.numeric(stats::quantile(d, c(.025, .975), names = FALSE))
+      }
+    ),
+    lo_95 = purrr::map_dbl(ci, 1),
+    hi_95 = purrr::map_dbl(ci, 2)
+  ) |>
+  select(rotten_tomatoes_link, movie_title, tomatometer_rating, tomatometer_count,post_mean, lo_95, hi_95)
+```
+
+# Audience Sampling
+
+```{r}
+set.seed(30)
+audience_posterior_stats <- modeling_data$audience_out |> 
+  dplyr::mutate(
+    post_mean = w1 * (a1 / (a1 + b1)) + w2 * (a2 / (a2 + b2)),
+    ci = purrr::pmap(
+      list(w1, a1, b1, a2, b2),
+      ~ {
+        d <- sample_from_stored_posterior(..1, ..2, ..3, ..4, ..5, S = 10000)
+        as.numeric(stats::quantile(d, c(.025, .975), names = FALSE))
+      }
+    ),
+    lo_95 = purrr::map_dbl(ci, 1),
+    hi_95 = purrr::map_dbl(ci, 2)
+  ) |>
+  select(rotten_tomatoes_link, movie_title, audience_rating, audience_count,post_mean, lo_95, hi_95)
+```
+
+# Saving Data:
+
+```{r}
+saveRDS(object = list(critic_posterior_stats = critic_posterior_stats,
+                      audience_posterior_stats = audience_posterior_stats),
+        file = "D:/Portfolio Projects/rotten_tomatoes_empirical_bayes/Data/Processed/posterior_stats.RData")
+```
