@@ -1,0 +1,69 @@
+---
+title: "How can movie reviews be better understood? (working title)"
+author: "Jack Cunningham"
+format: html
+editor: visual
+---
+
+```{r, loading data}
+modeling_data <- readRDS("D:/Portfolio Projects/rotten_tomatoes_empirical_bayes/Data/Processed/mixed_beta_output.RData")
+posterior_stats <- readRDS("D:/Portfolio Projects/rotten_tomatoes_empirical_bayes/Data/Processed/posterior_stats.RData")
+load("D:/Portfolio Projects/rotten_tomatoes_empirical_bayes/Data/Processed/movie_df.RData")
+mixed_beta_output <- readRDS("D:/Portfolio Projects/rotten_tomatoes_empirical_bayes/Data/Processed/mixed_beta_output.RData")
+```
+
+```{r, loading functions}
+helper_functions <- readRDS("D:/Portfolio Projects/rotten_tomatoes_empirical_bayes/Data/Functions/fit_mixed_beta_helpers.RData")
+```
+
+```{r, loading libraries}
+library(tidyverse)
+```
+
+# Research Motivation & Question
+
+Lets say you want to watch a movie at home, how should you decide on what movie is best?
+
+An idea would be checking a movie review site to see what is reviewed best. Rotten Tomatoes provides the percentage of critic and audience reviews that enjoyed a movie enough to give it a "fresh" rating. What movies have the highest tomatometer?
+
+![](images/top_movies.JPG)
+
+Hmm, I've never heard of these movies before. Let's take a look at 'Twas the Fight Before Christmas. Maybe its the next Christmas Story.
+
+![](images/twas_the_fight.JPG)
+
+Immediately we see an issue with relying solely on the tomatometer, it can be a perfect 100% if only a few critics have given favorable reviews.
+
+How can we create a metric that lets us find and compare movies in a fair way? Empirical Bayes provides a solution!
+
+# Data Overview
+
+The data for this analysis has been kindly scraped by Stefano Leone who has shared this data on [Kaggle](https://www.kaggle.com/datasets/stefanoleone992/rotten-tomatoes-movies-and-critic-reviews-dataset). It provides us with data from Rotten Tomatoes for 17,000 movies up to the end of 2020. For each movie we have the number of critics and audience who reviewed a movie and the percentage who reviewed them as fresh, exactly what we need to perform this analysis.
+
+# Constructing a Prior
+
+Empirical Bayes approaches are very helpful for situations where the statistic of interest is a proportion and our goal is to compare the "true" proportions after adjusting for known information about movie reviews. Since we want to choose the best movie, and tomatometer is a percentage of reviews, and we have a large number of movies (17,000) this method is perfect
+
+The first step is to take a look at the distribution of tomatometer for movies with a certain breakpoint of critic reviews.
+
+```{r, filtered movies}
+reduced_movies <- movie_df |> 
+  mutate(p = tomato_meter_fresh_critics_count / tomatometer_count) |> 
+  filter(tomatometer_count > 50)
+```
+
+```{r, fig 1}
+reduced_movies |> 
+  ggplot(aes(x = tomatometer_count)) +
+  geom_histogram()
+
+```
+
+```{r}
+reduced_movies <- filtered_movie_df |> filter(tomatometer_count > 50)
+p <- reduced_movies$tomato_meter_fresh_critics_count / reduced_movies$tomatometer_count
+p <- p[is.finite(p)]
+
+hist(p, breaks = 40, freq = FALSE, main = "Proportions with Beta Mixture Overlay", xlab = "fresh / total")
+curve(mix_beta_density(x, mm$pi, mm$alpha, mm$beta), add = TRUE, lwd = 2)
+```
