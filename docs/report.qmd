@@ -66,9 +66,9 @@ reduced_movies |>
 
 ```
 
-We can see that there are few truly bad reviews, and
+There are very few movies with a tomatometer near zero, almost an equal amount distributed between 10% to 50%, then a large peak around 85%, tailing off near a perfect score of 100%.
 
-with density:
+We fit a distribution to this observed data to form an empirical prior, in this case a mixed beta distribution will fit nicely.
 
 ```{r}
 reduced_movies |> 
@@ -77,8 +77,31 @@ reduced_movies |>
   stat_function(fun = mix_beta_density, 
               args = list(pi =  modeling_data$mm_critic$pi, alpha = modeling_data$mm_critic$alpha, beta = modeling_data$mm_critic$beta),
               color = "red") +
-  theme_minimal() +
-  labs(x = "Tomatometer", y = "", main = "")
+  labs(x = "Tomatometer", y = "", title = "Empirical Prior",
+       subtitle = "Mixed Beta fit") +
+  theme_minimal()
+```
+
+Now with this prior we can analyze our posterior estimates of tomatometer for each movie.
+
+# Posterior Analysis; How have our estimates changed?
+
+One of the most helpful aspects of emprical bayes is how it "shrinks" estimates. This shrinking occurs strongly for movies with only a few reviews, and lightly for movies with many reviews (as the observed data dominates the information provided by the prior). Let's see how shrinking affects the posterior estimates as the count of reviews change.
+
+Let's take a look at what happens to the movies with the highest tomatometer rating as the number of reviews change.
+
+```{r}
+perfect_scores <- critic_posterior_stats |> 
+  filter(tomatometer_rating == 100) 
+perfect_scores |> 
+  ggplot(aes(x = tomatometer_count, y = post_mean)) +
+  geom_point()
+```
+
+```{r}
+critic_posterior_stats <- posterior_stats$critic_posterior_stats
+critic_posterior_stats |> 
+  slice_max(tomatometer_rating, n = 100)
 ```
 
 ```{r}
