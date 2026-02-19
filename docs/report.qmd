@@ -16,6 +16,10 @@ mixed_beta_output <- readRDS("D:/Portfolio Projects/rotten_tomatoes_empirical_ba
 helper_functions <- readRDS("D:/Portfolio Projects/rotten_tomatoes_empirical_bayes/Data/Functions/fit_mixed_beta_helpers.RData")
 ```
 
+```{r}
+mix_beta_density <- helper_functions$mix_beta_density
+```
+
 ```{r, loading libraries}
 library(tidyverse)
 ```
@@ -42,28 +46,46 @@ The data for this analysis has been kindly scraped by Stefano Leone who has shar
 
 # Constructing a Prior
 
-Empirical Bayes approaches are very helpful for situations where the statistic of interest is a proportion and our goal is to compare the "true" proportions after adjusting for known information about movie reviews. Since we want to choose the best movie, and tomatometer is a percentage of reviews, and we have a large number of movies (17,000) this method is perfect
+Empirical Bayes approaches are very helpful for situations where the statistic of interest is a proportion and our goal is to compare the "true" proportions after adjusting for known information about movie reviews. Since we want to choose the best movie, and tomatometer is a percentage of reviews that are positive, and we have a large number of movies (17,000) this method is perfect
 
 The first step is to take a look at the distribution of tomatometer for movies with a certain breakpoint of critic reviews.
 
 ```{r, filtered movies}
 reduced_movies <- movie_df |> 
   mutate(p = tomato_meter_fresh_critics_count / tomatometer_count) |> 
-  filter(tomatometer_count > 50)
+  filter(tomatometer_count > 15)
 ```
 
 ```{r, fig 1}
 reduced_movies |> 
-  ggplot(aes(x = tomatometer_count)) +
-  geom_histogram()
+  ggplot(aes(x = tomatometer_rating/100)) +
+  geom_histogram(bins = 20,color = "white", fill = "#2C3E50") +
+  theme_minimal() +
+  labs(x = "Tomatometer", y = "Count", title = "Distribution of Tomatometer",
+       subtitle = "Movies with 15 or greater reviews")
 
 ```
 
+We can see that there are few truly bad reviews, and
+
+with density:
+
 ```{r}
-reduced_movies <- filtered_movie_df |> filter(tomatometer_count > 50)
+reduced_movies |> 
+  ggplot(aes(x = tomatometer_rating/100)) +
+  geom_histogram(aes(y = after_stat(density)),bins = 20,color = "white", fill = "#2C3E50") +
+  stat_function(fun = mix_beta_density, 
+              args = list(pi =  modeling_data$mm_critic$pi, alpha = modeling_data$mm_critic$alpha, beta = modeling_data$mm_critic$beta),
+              color = "red") +
+  theme_minimal() +
+  labs(x = "Tomatometer", y = "", main = "")
+```
+
+```{r}
+reduced_movies <- movie_df |> filter(tomatometer_count > 50)
 p <- reduced_movies$tomato_meter_fresh_critics_count / reduced_movies$tomatometer_count
 p <- p[is.finite(p)]
 
 hist(p, breaks = 40, freq = FALSE, main = "Proportions with Beta Mixture Overlay", xlab = "fresh / total")
-curve(mix_beta_density(x, mm$pi, mm$alpha, mm$beta), add = TRUE, lwd = 2)
+curve(mix_beta_density(x, modeling_data$mm_critic$pi, modeling_data$mm_critic$alpha, modeling_data$mm_critic$beta), add = TRUE, lwd = 2)
 ```
