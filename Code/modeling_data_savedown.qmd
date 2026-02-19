@@ -38,13 +38,24 @@ posterior_params_mixture <- helper_functions$posterior_params_mixture
 sample_from_stored_posterior <- helper_functions$sample_from_stored_posterior
 ```
 
+# Filtering Data
+
+We don't want movies with very few reviews affecting the fit of the mixed-beta, so we make a decision on filtering out the number of critic and audience reviews. I chose the top 70% of data, this was pretty subjective. I didn't want to filter too much out, because then we could only be looking at popular (so likely associated with well liked) movies.
+
+```{r}
+movie_df_critic_reduced <- movie_df |> 
+  filter(tomatometer_count > quantile(tomatometer_count,.3))
+movie_df_audience_reduced <- movie_df |> 
+  filter(audience_count > quantile(audience_count,.3))
+```
+
 # Fitting Mixture Beta to Tomatometer (critic) Reviews
 
 ```{r, cache=TRUE}
 set.seed(10)
 mm_critic <- fit_beta_binom_mixture(
-  k = movie_df$tomato_meter_fresh_critics_count,
-  n = movie_df$tomatometer_count,
+  k = movie_df_critic_reduced$tomato_meter_fresh_critics_count,
+  n = movie_df_critic_reduced$tomatometer_count,
   K = 2,
   verbose = TRUE
 )
@@ -75,8 +86,8 @@ critics_out <- movie_df |>
 ```{r, cache=TRUE}
 set.seed(15)
 mm_audience <- fit_beta_binom_mixture(
-  k = movie_df$audience_rating_fresh_count,
-  n = movie_df$audience_count,
+  k = movie_df_audience_reduced$audience_rating_fresh_count,
+  n = movie_df_audience_reduced$audience_count,
   K = 2,
   verbose = TRUE
 )
