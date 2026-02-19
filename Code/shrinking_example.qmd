@@ -4,23 +4,40 @@ format: html
 editor: visual
 ---
 
-## Quarto
+# Loading Libraries and Data
 
-Quarto enables you to weave together content and executable code into a finished document. To learn more about Quarto see <https://quarto.org>.
-
-## Running Code
-
-When you click the **Render** button a document will be generated that includes both content and the output of embedded code. You can embed code like this:
+Libraries
 
 ```{r}
-1 + 1
+library(tidyverse)
 ```
 
-You can add options to executable code like this
+Data:
 
 ```{r}
-#| echo: false
-2 * 2
+modeling_data <- readRDS("D:/Portfolio Projects/rotten_tomatoes_empirical_bayes/Data/Processed/mixed_beta_output.RData")
 ```
 
-The `echo: false` option disables the printing of code (only output is displayed).
+Helper Functions:
+
+```{r}
+helper_functions <- readRDS("D:/Portfolio Projects/rotten_tomatoes_empirical_bayes/Data/Functions/fit_mixed_beta_helpers.RData")
+```
+
+Saving functions that are needed:
+
+```{r}
+fit_beta_binom_mixture <- helper_functions$fit_beta_binom_mixture
+log_beta_binom_pmf <- helper_functions$log_beta_binom_pmf
+mix_beta_density <- helper_functions$mix_beta_density
+mom_beta_ab <- helper_functions$mom_beta_ab
+neg_wll_component <- helper_functions$neg_wll_component
+posterior_params_mixture <- helper_functions$posterior_params_mixture
+sample_from_stored_posterior <- helper_functions$sample_from_stored_posterior
+```
+
+# Perfect Scores
+
+```{r}
+
+```
