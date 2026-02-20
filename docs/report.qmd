@@ -88,20 +88,58 @@ Now with this prior we can analyze our posterior estimates of tomatometer for ea
 
 One of the most helpful aspects of emprical bayes is how it "shrinks" estimates. This shrinking occurs strongly for movies with only a few reviews, and lightly for movies with many reviews (as the observed data dominates the information provided by the prior). Let's see how shrinking affects the posterior estimates as the count of reviews change.
 
-Let's take a look at what happens to the movies with the highest tomatometer rating as the number of reviews change.
+Let's take a look at what this looks like:
 
 ```{r}
-perfect_scores <- critic_posterior_stats |> 
-  filter(tomatometer_rating == 100) 
-perfect_scores |> 
-  ggplot(aes(x = tomatometer_count, y = post_mean)) +
-  geom_point()
+shrinkage_df <- critic_posterior_stats |> 
+  filter(tomatometer_rating < 15 | tomatometer_rating > 85) |> 
+  mutate(high_scoring = ifelse(tomatometer_rating > 85, "High Score",
+                               "Low Score")) |> 
+  mutate(high_scoring = factor(high_scoring, c("Low Score","High Score")))
 ```
 
 ```{r}
-critic_posterior_stats <- posterior_stats$critic_posterior_stats
+shrinkage_df |> 
+  ggplot(aes(x = tomatometer_rating, y = post_mean*100, col = log(tomatometer_count))) +
+  geom_point() +
+  geom_abline(col = "#26F7FD") +
+  facet_wrap(~ high_scoring, scales = "free") +
+  theme_minimal() +
+  labs(x = "Observed Tomatometer Rating", y = "Adjusted Tomatometer Rating",
+       title = "How Bayesian Shrinking Affects Extreme Observed Ratings",
+       subtitle = "Line is the observed tomatometer") +
+  scale_color_gradient(low = "#08306b", high = "#26F7FD",
+                       name = "Critic Reviews",
+                        breaks = log(c(10,100,500)),
+                        labels = c("10","100","500")) +
+  guides(color = guide_colorbar(
+  barheight = 8,
+  barwidth = 1
+))
+```
+
+The shrinking has its greatest effect on extreme values with only a few reviews.
+
+For instance, for an observed tomatometer rating of zero having just one critic review driving that score brings the adjusted rating up to 20. This makes sense, a single negative review does not communicate much about the quality of a movie and there are not many observed zeros in movies with greater than 15 reviews in our data.
+
+On the other hand, for a perfect observed tomatometer rating of one hundred we see that the prior adjusts the tomatometer down. Once again, since there are few observed perfect scores for movies with greater than 15 reviews the estimate is driven mainly by the prior until many reviews are recorded.
+
+This shrinkage is a huge help for finding the most beloved movies by critics.
+
+```{r}
 critic_posterior_stats |> 
-  slice_max(tomatometer_rating, n = 100)
+  slice_max(post_mean, n = 10) |>
+  rename()
+```
+
+```{r}
+critic_posterior_stats |> 
+  ggplot(aes(x = tomatometer_rating, y = post_mean, 
+             col = log(tomatometer_count))) +
+  geom_point() +
+  xlim(0,25) +
+  ylim(0,.35)
+  
 ```
 
 ```{r}
