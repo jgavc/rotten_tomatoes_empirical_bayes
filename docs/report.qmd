@@ -10,10 +10,12 @@ modeling_data <- readRDS("D:/Portfolio Projects/rotten_tomatoes_empirical_bayes/
 posterior_stats <- readRDS("D:/Portfolio Projects/rotten_tomatoes_empirical_bayes/Data/Processed/posterior_stats.RData")
 load("D:/Portfolio Projects/rotten_tomatoes_empirical_bayes/Data/Processed/movie_df.RData")
 mixed_beta_output <- readRDS("D:/Portfolio Projects/rotten_tomatoes_empirical_bayes/Data/Processed/mixed_beta_output.RData")
+critic_posterior_stats <- posterior_stats$critic_posterior_stats
 ```
 
 ```{r, loading functions}
 helper_functions <- readRDS("D:/Portfolio Projects/rotten_tomatoes_empirical_bayes/Data/Functions/fit_mixed_beta_helpers.RData")
+sample_from_stored_posterior <- helper_functions$sample_from_stored_posterior
 ```
 
 ```{r}
@@ -132,21 +134,43 @@ critic_posterior_stats |>
   rename()
 ```
 
+Now we see movies we expect would be at the top of critic reviews.
+
+# Comparisons
+
+With our shrunken estimates we can also now compare movies against each other to see what the probability is that one movie is better than another according to critics. We can also compare multiple at the same time.
+
+Let's say we wanted to find the best comedic Christmas movie according to critics, using the posterior distribution we can find the probability that each movie is the best of the bunch by simulating.
+
 ```{r}
-critic_posterior_stats |> 
-  ggplot(aes(x = tomatometer_rating, y = post_mean, 
-             col = log(tomatometer_count))) +
-  geom_point() +
-  xlim(0,25) +
-  ylim(0,.35)
-  
+critics_out <- mixed_beta_output$critics_out
+christmas_comedies <- critics_out |> 
+  filter(movie_title %in% c("National Lampoon's Christmas Vacation",
+                            "Elf","A Christmas Story","Home Alone"))
 ```
 
 ```{r}
-reduced_movies <- movie_df |> filter(tomatometer_count > 50)
-p <- reduced_movies$tomato_meter_fresh_critics_count / reduced_movies$tomatometer_count
-p <- p[is.finite(p)]
+draws_long <- df_draws |> 
+  select(movie_title, draws) |> 
+  unnest_longer(draws, values_to = "theta") |> 
+  group_by(movie_title) |> 
+  mutate(draw = row_number()) |> 
+  ungroup()
+```
 
-hist(p, breaks = 40, freq = FALSE, main = "Proportions with Beta Mixture Overlay", xlab = "fresh / total")
-curve(mix_beta_density(x, modeling_data$mm_critic$pi, modeling_data$mm_critic$alpha, modeling_data$mm_critic$beta), add = TRUE, lwd = 2)
+```{r}
+draws_long |> 
+  ggplot(aes(x = theta, color = movie_title)) +
+  geom_density()
+```
+
+```{r}
+best_prob <- draws_long |> 
+  group_by(draw) |> 
+  mutate(max_draw = max(theta)) |> 
+  ungroup() |> 
+  mutate(best = theta == max_draw) |> 
+  group_by(movie_title) |> 
+  summarise(best_probability = mean(best))
+  
 ```
