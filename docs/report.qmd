@@ -1,8 +1,11 @@
 ---
-title: "How can movie reviews be better understood? (working title)"
+title: "Better Movie Reviews? The problem with Rotten Tomatoes, and how to fix it."
 author: "Jack Cunningham"
 format: html
 editor: visual
+echo:   false
+message: false
+warning: false
 ---
 
 ```{r, loading data}
@@ -11,6 +14,7 @@ posterior_stats <- readRDS("D:/Portfolio Projects/rotten_tomatoes_empirical_baye
 load("D:/Portfolio Projects/rotten_tomatoes_empirical_bayes/Data/Processed/movie_df.RData")
 mixed_beta_output <- readRDS("D:/Portfolio Projects/rotten_tomatoes_empirical_bayes/Data/Processed/mixed_beta_output.RData")
 critic_posterior_stats <- posterior_stats$critic_posterior_stats
+
 ```
 
 ```{r, loading functions}
@@ -24,9 +28,54 @@ mix_beta_density <- helper_functions$mix_beta_density
 
 ```{r, loading libraries}
 library(tidyverse)
+library(DT)
 ```
 
 # Research Motivation & Question
+
+Let's find the the best movie based on tomatometer.
+
+```{r}
+perfect_scores <- critic_posterior_stats |> 
+  filter(tomatometer_rating == 100) |> 
+  select(movie_title,tomatometer_rating,tomatometer_count)
+datatable(perfect_scores, colnames = c("Title","Tomatometer","Number of Critic Reviews"))
+```
+
+Hmm... there are nine hundred movies with a perfect tomatometer score, but most of them don't look familiar at all. Why is that? It's because not all movies have the same number of critic reviews. In fact, taking a look at movies with only a perfect tomatometer score we can see.
+
+```{r}
+perfect_score_lot_df <- critic_posterior_stats |> 
+  mutate(perfect = ifelse(tomatometer_rating == 100,"Perfect","Not Perfect"))
+```
+
+```{r}
+perfect_score_lot_df |> 
+  ggplot(aes(x = tomatometer_count)) +
+  geom_histogram(aes(y = after_stat(count/sum(count))), binwidth = 10, position = "identity") +
+  facet_wrap(~perfect) +
+  labs(x = "Number of Critic Reviews", y = "Percentage of Reviews")
+```
+
+```{r}
+perfect_score_lot_df %>%
+  group_by(perfect) %>%
+  mutate(w = 1 / n()) %>%   # each group sums to 1
+  ungroup() %>%
+  ggplot(aes(x = tomatometer_count)) +
+  geom_histogram(
+    aes(weight = w, y = after_stat(count)),
+    binwidth = 10,
+    position = "identity",
+    alpha = 0.5,
+    color = "white",
+    fill = "#2C3E50"
+  ) +
+  facet_wrap(~perfect) +
+  labs(x = "Number of Critic Reviews", y = "Percent within Group") +
+  xlim(0,300) +
+  theme_minimal()
+```
 
 Lets say you want to watch a movie at home, how should you decide on what movie is best?
 
