@@ -1,5 +1,5 @@
 ---
-title: "Better Movie Reviews? The problem with Rotten Tomatoes, and how to fix it."
+title: "Better Movie Reviews? The problem with Tomatometer rating, and how to fix it."
 author: "Jack Cunningham"
 format: html
 editor: visual
@@ -33,16 +33,16 @@ library(DT)
 
 # Research Motivation & Question
 
-Let's find the the best movie based on tomatometer.
+Let's find a movie to watch using Rotten Tomatoes. A natural start is looking at movies with the best critic reviews, on Rotten Tomatoes this metric is called the Tomatometer. This rating is the percentage of critic reviews that are positive. Let's take a look at the best one thousand movies according to this metric.
 
 ```{r}
-perfect_scores <- critic_posterior_stats |> 
-  filter(tomatometer_rating == 100) |> 
+perfect_scores <- critic_posterior_stats |>
+  slice_max(tomatometer_rating, n = 1000) |> 
   select(movie_title,tomatometer_rating,tomatometer_count)
-datatable(perfect_scores, colnames = c("Title","Tomatometer","Number of Critic Reviews"))
+datatable(perfect_scores, colnames = c("Title","Tomatometer","Number of Critic Reviews"), options = list(lengthChange = FALSE))
 ```
 
-Hmm... there are nine hundred movies with a perfect tomatometer score, but most of them don't look familiar at all. Why is that? It's because not all movies have the same number of critic reviews. In fact, for movies with perfect reviews over fifty percent have less than ten critic reviews.
+The first thing we realize is how many movies have a perfect rating, there are nine hundred of them but most don't look familiar. Why is that? It's because not all movies have the same number of critic reviews. In fact, for movies with perfect reviews over fifty percent have less than ten critic reviews.
 
 ```{r}
 perfect_score_lot_df <- critic_posterior_stats |> 
@@ -56,32 +56,33 @@ perfect_score_lot_df %>%
   ungroup() %>%
   ggplot(aes(x = tomatometer_count)) +
   geom_histogram(
-    aes(weight = w, y = after_stat(count)),
+    aes(weight = w, y = after_stat(count)*100),
     binwidth = 10,
     position = "identity",
-    alpha = 0.5,
     color = "white",
     fill = "#2C3E50"
   ) +
   facet_wrap(~perfect) +
-  labs(x = "Number of Critic Reviews", y = "Percent within Group") +
+  labs(x = "Number of Critic Reviews", y = "Percent of Critic Reviews") +
   xlim(0,200) +
   theme_minimal()
 ```
 
-With that in mind, how should we adjust our search? A natural idea is introducing a cutoff, for instance only looking at movies with over fifty critic reviews.
+With that in mind, how should we adjust our search?
 
-However with this we run into issues, what if we were interested at looking at movies that are just coming out? What about movies before the internet age that don't have enough reviews digitized and captured by rotten tomatoes? They would be ignored due to this cutoff. Is there a way to do this better?
+A natural idea is introducing a cutoff, for instance only looking at movies with over fifty critic reviews.
+
+However with this we run into issues, what if we were interested at looking at movies that are just coming out? What about movies before the internet age that don't have enough reviews digitized and captured by Rotten Tomatoes? They would be ignored due to this cutoff. Is there a way to do this better?
 
 # Empirical Bayes
 
-A helpful technique for this situation is Empirical Bayes. As opposed to traditional Bayes, Empirical Bayes estimates the prior with the data itself. The main constraint is whether you have enough data, as this is an approximation to more exact Bayesian methods. Thankfully, with over seventeen thousand movies we certainly have enough data.
+A helpful technique for this situation is Empirical Bayes. As opposed to traditional Bayes, Empirical Bayes estimates the prior with the data itself. The main constraint is whether you have enough data, as this is an approximation to more exact Bayesian methods. Thankfully, with over seventeen thousand movies that won't be an issue.
 
-Empirical Bayes learns the distribution of movie reviews, and then will combine that information with the observed reviews from critics for each movie. This allows for us to compare movies to each other without being concerned about the number of critic reviews, and it is intuitive as we all know that a movie with a single positive critic review is not truly a perfect movie. Let's use this method.
+Empirical Bayes learns the distribution of movie reviews, and then will combine that information with the observed reviews from critics for each movie. This allows us to compare movies to each other without being concerned about the number of critic reviews. It is also intuitive, a movie with ninety nine positive reviews and one negative review should be ranked higher than a movie with a lone positive review.
 
 #### Estimating a Prior
 
-The first step is to take a look at the distribution of tomatometer for movies with a certain break point of critic reviews, this lets us filter out noise (like movies with tomato meters of zero or one hundred with only a few reviews).
+The first step is to take a look at the distribution of Tomatometer rating for movies with a certain break point of critic reviews, this lets us filter out noise.
 
 ```{r, filtered movies}
 reduced_movies <- movie_df |> 
@@ -96,7 +97,7 @@ reduced_movies |>
   ggplot(aes(x = tomatometer_rating/100)) +
   geom_histogram(binwidth = .05,color = "white", fill = "#2C3E50") +
   theme_minimal() +
-  labs(x = "Tomatometer", y = "Count", title = "Distribution of Tomatometer",
+  labs(x = "Tomatometer rating", y = "Count", title = "Distribution of Tomatometer rating",
        subtitle = "Movies with 15 or greater reviews") +
   #geom_vline(aes(xintercept = mean(tomatometer_rating/100))) +
   annotate(geom = "segment", x = reduced_mean, xend = reduced_mean, 
@@ -111,7 +112,7 @@ reduced_movies |>
 
 ```
 
-The distribution of tomatometer is left skewed, with a peak near 90. The mean is slightly left of the median, with an average score of 62 and a median score of 69. There are very few tomatometer ratings in the band of 0 - 0.05.
+The distribution of Tomatometer rating is left skewed, with a peak near 90. The mean is slightly left of the median, with an average score of 62 and a median score of 69. There are very few ratings in the band of 0 - 0.05.
 
 We fit a distribution to this observed data to form an empirical prior, in this case a mixed beta distribution will fit nicely.
 
@@ -127,11 +128,11 @@ reduced_movies |>
   theme_minimal()
 ```
 
-Now with this prior we can analyze our posterior estimates of tomatometer for each movie.
+Now with this prior we can analyze our posterior estimates of Tomatometer ratings for each movie.
 
-# Posterior Analysis; How have our ratings changed?
+# Posterior Analysis: How have our ratings changed?
 
-One of the most helpful aspects of Emprical Bayes is how it "shrinks" estimates, movies are pulled toward what the prior distribution would suggest. This shrinking occurs strongly for movies with only a few reviews, and lightly for movies with many reviews (as the observed data dominates the information provided by the prior). Let's see how shrinking affects the posterior estimates as the count of reviews change.
+One of the most helpful aspects of Empirical Bayes is how it "shrinks" estimates. Movies are pulled toward what the prior distribution would suggest. This shrinking occurs strongly for movies with only a few reviews, and lightly for movies with many reviews. Let's see this in action.
 
 ```{r}
 shrinkage_df <- critic_posterior_stats |> 
@@ -161,13 +162,11 @@ shrinkage_df |>
 ))
 ```
 
-The shrinking has its greatest effect on extreme values with only a few reviews.
+A movie with a Tomatometer rating of zero with a single review gets pulled up to an adjusted Tomatometer rating of 20. As we observed earlier, scores very close to zero happen rarely when enough reviews are available.
 
-For instance, a movie with a tomatometer rating of zero with a single review gets pulled up to an adjusted tomatometer rating of 20. As we observed earlier, scores very close to zero happen rarely.
+On the other hand, movies with a perfect Tomatometer rating get pulled down when there are only a few reviews.
 
-On the other hand, movies with a perfect tomatometer rating get pulled down when there are only a few reviews.
-
-Now we can look at adjusted tomatometer ratings to find the movies that are actually most beloved by critics, and see their credible intervals. See the top one thousand movies according to the adjusted ratings below.
+Now we can look at adjusted Tomatometer ratings to find the movies that are actually most beloved by critics, and see their credible intervals. See the top one thousand movies according to the adjusted ratings below.
 
 ```{r}
 adjusted_scores <- critic_posterior_stats |> 
@@ -179,7 +178,7 @@ adjusted_scores <- critic_posterior_stats |>
 datatable(adjusted_scores, colnames = c("Title","Adjusted Tomatometer Rating","2.5%","97.5%","Original Tomatometer Rating","Number of Critic Reviews"))
 ```
 
-Our adjusted rating does a much better job of showing the best movies according to critics, all of these top movies were nominated for awards!
+Our adjusted rating does a much better job of showing the best movies according to critics, many of these top movies were nominated for awards!
 
 # Comparisons
 
@@ -205,7 +204,7 @@ datatable(christmas_comedies_output, colnames = c("Title","Adjusted Tomatometer 
                          paging = FALSE, info = FALSE))
 ```
 
-We could just select the one with the highest adjusted tomatometer rating, but finding the probability that each movie is the best of the bunch can give a good idea of how far apart each movie really is.
+We could just select the one with the highest adjusted Tomatometer rating, but finding the probability that each movie is best can give a good idea of how far apart each movie really is.
 
 ```{r}
 set.seed(10)
@@ -254,3 +253,15 @@ datatable(best_prob,colnames = c("Title","Probability of being best"),
 It seems that A Christmas Story has the highest probability of being the best movie according to critics, but Elf has a probability of about seventeen percent. These two movies are in contention for being the best Christmas comedy movie according to critics.
 
 With this output we could setup a rule. For instance we could watch the trailers of the movies with greater than a ten percent chance of being the best movie according to critics before making a decision on what to watch.
+
+# Conclusion
+
+The use of Empirical Bayes is helpful when data is plentiful and we are dealing with data where there are uneven replications. It also allows for interesting extensions after the posterior distribution for each movie is created.
+
+There are a few modeling decisions I made in this analysis.
+
+In this approach we assume that movie quality is not related to the number of critic reviews, but it is quite possible that movie quality is positively correlated with the number of critic reviews as larger movies have larger budgets and thus better talent. However I decided to not model that relationship as older movies with less digitized reviews would be penalized systematically. This approach would be interesting if we narrowed the population of movies to those in the 2010-current era where most critical reviews are available online.
+
+There could be difference in movie distribution based on genre, for instance you may notice while browsing the new movie ratings that there are many documentaries. Documentaries may on average receive better reviews than traditional movies, especially for ones which goal is to inform the audience as opposed to entertain the audience. Unfortunately genre data was not available in this data set, but a possible extension would be to use a different data source to bridge that gap.
+
+Overall this analysis improves upon the Tomatometer rating, and allows for interesting ways to further utilize Rotten Tomato data. If you would like to use this model I am currently putting together a shiny app for that purpose.
