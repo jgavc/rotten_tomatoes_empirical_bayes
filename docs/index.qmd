@@ -31,7 +31,7 @@ library(tidyverse)
 library(DT)
 ```
 
-# Research Motivation & Question
+# Introduction
 
 Let's find a movie to watch using Rotten Tomatoes. A natural start is looking at movies with the best critic reviews, on Rotten Tomatoes this metric is called the Tomatometer. This rating is the percentage of critic reviews that are positive. Let's take a look at the best one thousand movies according to this metric.
 
