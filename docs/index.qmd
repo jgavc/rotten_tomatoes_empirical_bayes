@@ -150,8 +150,7 @@ shrinkage_df |>
   facet_wrap(~ high_scoring, scales = "free") +
   theme_minimal() +
   labs(x = "Observed Tomatometer Rating", y = "Adjusted Tomatometer Rating",
-       title = "How Bayesian Shrinking Affects Extreme Observed Ratings",
-       subtitle = "Line is the observed tomatometer") +
+       title = "How Bayesian Shrinking Affects Extreme Observed Ratings") +
   scale_color_gradient(low = "#08306b", high = "#26F7FD",
                        name = "Critic Reviews",
                         breaks = log(c(10,100,500)),
