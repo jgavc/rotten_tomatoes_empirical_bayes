@@ -35,6 +35,9 @@ server <- function(input, output, server) {
                                                   a2 = posterior()$post_alpha[2], b2 = posterior()$post_beta[2], S = 10000))
   df <- reactive(tibble(draws = sample()))
   quantiles <- reactive(quantile(df() |> pull(draws),c(.025,.975)))
+  exp_value <- reactive(mean(sample())*100)
+  change <- reactive(exp_value() - input$rating)
+  line_color <- reactive(ifelse(change() > 0,"green","red"))
   
   print_posterior <- reactive(print(posterior))
   output$sample1 <- renderText(quantiles())
@@ -44,8 +47,15 @@ server <- function(input, output, server) {
                                xlim(0,100) +
                                theme_minimal() +
                                labs(x = "Adjusted Tomatometer", title = "Adjusted Tomatometer Density",
-                                    subtitle = "Red lines are 95% credible interval")
-                               )
+                                    subtitle = "Red lines are 95% credible interval") +
+                               annotate("segment", x = input$rating, xend = exp_value(), y = 0,
+                                        arrow = arrow(length = unit(.2,"cm")), color = line_color()))
+  observe({
+    cat("exp_value:", exp_value(), "\n")
+    cat("input rating:", input$rating, "\n")
+    cat("change:", change(), "\n\n")
+  })
+                               
 }
 
 shinyApp(ui, server)
