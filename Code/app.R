@@ -1,5 +1,6 @@
 library(shiny)
 library(tidyverse)
+library(DT)
 
 #Loading Data
 modeling_data <- readRDS("D:/Portfolio Projects/rotten_tomatoes_empirical_bayes/Data/Processed/mixed_beta_output.RData")
@@ -19,14 +20,66 @@ ui <- fluidPage(
   pageWithSidebar(
     headerPanel('Empirical Bayes Rating Adjustment'),
     sidebarPanel(
-      numericInput('rating', 'Tomatometer Rating', 50, min = 0, max = 100),
+      numericInput('rating', 'Tomatometer Rating', 90, min = 0, max = 100),
       numericInput('num_reviews', 'Number of Critic Reviews', 10, min = 1, max = 1000),
+      br(),
+      tags$hr(),
+      tags$p(
+        "With fewer reviews, ratings shrink toward the typical rating distribution.",
+        style = "font-size: 12px; color: #666;"
+      )
+      
     ),
     mainPanel(
-      textOutput("sample1"),
-      plotOutput('plot1')
-    )
-  ))
+      # --- Top summary "hero" area ---
+      fluidRow(
+        column(
+          12,
+          wellPanel(
+            tags$div(
+              style = "
+      display:flex;
+      gap: 24px;
+      align-items: stretch;
+      justify-content: space-between;
+    ",
+              
+              # Block 1
+              tags$div(
+                style = "flex:1; min-width: 0;",
+                tags$div("Adjusted Tomatometer", style = "font-size:12px; color:#666; margin-bottom:6px;"),
+                tags$div(textOutput("adj_rating_big"),
+                         style = "font-size:30px; font-weight:700; line-height:1;")
+              ),
+              
+              # Block 2
+              tags$div(
+                style = "flex:1; min-width: 0;",
+                tags$div("95% credible interval", style = "font-size:12px; color:#666; margin-bottom:6px;"),
+                tags$div(textOutput("ci_big"),
+                         style = "font-size:30px; font-weight:700; line-height:1;")
+              ),
+              
+              # Block 3 (right-aligned feels nice)
+              tags$div(
+                style = "flex:1; min-width: 0; text-align:right;",
+                tags$div("Change vs raw", style = "font-size:12px; color:#666; margin-bottom:6px;"),
+                tags$div(htmlOutput("delta_big"),
+                         style = "font-size:30px; font-weight:700; line-height:1;")
+              )
+            )
+          )
+        )
+      ),
+      
+      # --- Plot ---
+      fluidRow(
+        column(
+          12,
+          plotOutput("plot1", height = "380px")
+        )
+      )
+    )))
 
 server <- function(input, output, server) {
   posterior <- reactive(posterior_params_mixture(round(input$rating/100*input$num_reviews),input$num_reviews,
@@ -36,11 +89,24 @@ server <- function(input, output, server) {
   df <- reactive(tibble(draws = sample()))
   quantiles <- reactive(quantile(df() |> pull(draws),c(.025,.975)))
   exp_value <- reactive(mean(sample())*100)
+  output$stat_table <- renderDT(tibble(exp = round(exp_value(),2), lower = round(quantiles()[1]*100,2), upper = round(quantiles()[2]*100,2)),
+                                colnames = c("New Rating","2.5%","97.5%"), options = list(searching = FALSE, lengthChange = FALSE,
+                                                                                                    paging = FALSE, info = FALSE),
+                                rownames = FALSE
+                                )
+  output$adj_rating_big <- renderText(round(exp_value(),2))
+  output$ci_big <- renderText(str_c("(",round(quantiles()[1]*100,2),",",round(quantiles()[2]*100,2),")"))
+  
   change <- reactive(exp_value() - input$rating)
   line_color <- reactive(ifelse(change() > 0,"green","red"))
+  output$delta_big <- renderUI({
+    delta <- exp_value() - input$rating
+    sign <- ifelse(delta >= 0, "+", "")
+    col  <- ifelse(delta >= 0, "green", "red")
+    HTML(sprintf("<span style='color:%s;'>%s%.2f pts</span>", col, sign, delta))
+  })
   
   print_posterior <- reactive(print(posterior))
-  output$sample1 <- renderText(quantiles())
   output$plot1 <- renderPlot(ggplot(data = df(), aes(x = draws*100)) + 
                                geom_density() +
                                geom_vline(xintercept = quantiles()[1:2]*100, color = "red", linetype = "dashed") +
