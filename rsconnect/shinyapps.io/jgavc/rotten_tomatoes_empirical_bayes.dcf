@@ -1,0 +1,10 @@
+name: rotten_tomatoes_empirical_bayes
+title:
+username: jgavc
+account: jgavc
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 16807996
+bundleId: 11657697
+url: https://jgavc.shinyapps.io/rotten_tomatoes_empirical_bayes/
+version: 1
